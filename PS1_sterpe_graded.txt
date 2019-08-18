@@ -1,0 +1,12 @@
+Automated Grading Output for PS1 (Student: sterpe)
+
+Grading Area                        Points    
+--------------------------------------------------
+Code can be imported without error  0 of  0
+generatePattern function            1 of  1
+cleanGuess function                 1 of  1
+guessIsValid function               1 of  1
+evaluateGuess function              1 of  1
+playGame function                   3 of  3
+--------------------------------------------------
+Total                               7 of  7

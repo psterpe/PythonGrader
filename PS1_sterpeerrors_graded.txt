@@ -1,0 +1,17 @@
+Automated Grading Output for PS1 (Student: sterpeerrors)
+
+Grading Area                        Points    
+--------------------------------------------------
+Code can be imported without error  0 of  0
+generatePattern function            0 of  1
+    Function did not return the expected list, which was ['r', 'b', 'o', 'y']
+cleanGuess function                 0 of  1
+    Function did not return the expected list, which was ['r', 'g', 'r', 'v']
+guessIsValid function               0 of  1
+    Expected the function to return True, but it returned False
+evaluateGuess function              0 of  1
+    Expected the function to return [1, 1], but it returned [0, 0]
+playGame function                   0 of  3
+    Your code produced an error when we called the playGame function. The error was: EOF when reading a line
+--------------------------------------------------
+Total                               0 of  7
