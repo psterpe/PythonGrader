@@ -3,6 +3,7 @@ from importlib import import_module
 import re
 import sys
 
+VERSION = '1.0'
 GRADED_SYMBOL = 'Y'
 GRADER_FILE_PATTERN = re.compile('.*_GRADER.py')
 ASSIGNMENT_FILE_PATTERN = re.compile('.*_([a-zA-Z0-9]+)\.py')
@@ -252,4 +253,5 @@ def run_grader():
 
 
 if __name__ == '__main__':
+    print('Core Grader version {}\n'.format(VERSION))
     run_grader()
