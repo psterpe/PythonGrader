@@ -15,6 +15,6 @@ evaluateGuess function              0 of  1
 playGame function                   0 of  4
     Your code produced an error when we called the playGame function. The error was: EOF when reading a line
 --------------------------------------------------
-Correctness Points (10/10) * 5 = 0.0 of  5.0 
+Correctness Points    (0/8) * 5 = 0.0 of  5.0 
 --------------------------------------------------
 Total                             3.0 of  8.0 
