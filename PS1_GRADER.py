@@ -1,9 +1,12 @@
+
+MAX_POINTS = 8
+
 def test_generatePattern(module):
     expect = ['r', 'b', 'o', 'y']
     try:
         result = module.generatePattern()
         if result == expect:
-            return (1, '')
+            return (GRADING_DATA[0]['possiblePoints'], '')
         else:
             return (0, 'Function did not return the expected list, which was {}'.format(expect))
     except Exception as ex:
@@ -16,7 +19,7 @@ def test_cleanGuess(module):
     try:
         result = module.cleanGuess(None)
         if result == expect:
-            return (1, '')
+            return (GRADING_DATA[1]['possiblePoints'], '')
         else:
             return (0, 'Function did not return the expected list, which was {}'.format(expect))
     except Exception as ex:
@@ -29,7 +32,7 @@ def test_guessIsValid(module):
     try:
         result = module.guessIsValid(None)
         if result == expect:
-            return (1, '')
+            return (GRADING_DATA[2]['possiblePoints'], '')
         else:
             return (0, 'Expected the function to return True, but it returned {}'.format(result))
     except Exception as ex:
@@ -42,12 +45,13 @@ def test_evaluateGuess(module):
     try:
         result = module.evaluateGuess(None, None)
         if result == expect:
-            return(1, '')
+            return(GRADING_DATA[3]['possiblePoints'], '')
         else:
             return (0, 'Expected the function to return [1, 1], but it returned {}'.format(result))
     except Exception as ex:
         return (0, 'Your code produced an error when we called the evaluateGuess function. The error was: {}'
                 .format(ex))
+
 
 def test_playGame(module):
     # The playGame() function reads from standard input (stdin), so to feed it our "guesses," we need to fake
@@ -85,13 +89,10 @@ def test_playGame(module):
                 .format(ex))
 
     if result == expect:
-        return(3, '')
+        return(GRADING_DATA[4]['possiblePoints'], '')
     else:
         return(0, 'Expected to lose the game (return value of 10) after 10 guesses')
 
-
-
-# TODO: Make use of possiblePoints somehow...
 
 GRADING_DATA = [
     {
@@ -122,6 +123,6 @@ GRADING_DATA = [
         'key': 'play',
         'area': 'playGame function',
         'testfunc': test_playGame,
-        'possiblePoints': 3,
+        'possiblePoints': 4,
     }
 ]
