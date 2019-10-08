@@ -1,7 +1,7 @@
 from os import scandir, devnull
 from importlib import import_module
-import re
-import sys
+import json
+import re, sys
 
 VERSION = '1.0'
 GRADED_SYMBOL = 'Y'
@@ -102,14 +102,20 @@ class Assignment:
 #   3) is assumed to perform all the tests we want for a given area
 
 
-def list_py_files():
-    # Return a sorted list of all .py files in current directory that do not appear to be our grader files,
-    # that is, whose names do not end with _GRADER.py.
+# Takes in an object of type os.DirEntry
+def is_student_submission(entry):
+    return entry.is_file() and \
+           entry.name.endswith('.py') and not \
+           re.match(GRADER_FILE_PATTERN, entry.name) and \
+           entry.name != __file__
+
+
+def list_student_submissions():
     returnlist = []
 
     with scandir('.') as it:
         for entry in it:
-            if entry.is_file() and entry.name.endswith('.py') and not re.match(GRADER_FILE_PATTERN, entry.name):
+            if is_student_submission(entry):
                 returnlist.append(entry.name)
 
     it.close()
@@ -226,6 +232,24 @@ def dump_grading_results(assignments):
         outfile.close()
 
 
+# If the provided progress filename exists, load its data and return that list.
+# Otherwise, initialize a new list of assignment files and return it.
+def load_grading_progress(fname):
+    try:
+        with open(fname) as grading_progress_file:
+            assignment_files = json.load(grading_progress_file)
+    except:
+        assignment_files = []
+        for filename in list_student_submissions():
+            assignment_files.append([filename, False, 0])
+    return assignment_files
+
+
+def save_grading_progress(assignments, fname):
+    with open(fname, 'w') as grading_progress_file:
+        json.dump(assignments, grading_progress_file)
+
+
 def run_grader():
     # First read in our assignment grader file, or quit if that fails.
     assignment = input('Enter the name of the assignment to be graded, e.g., PS1: ').upper()
@@ -235,21 +259,14 @@ def run_grader():
         print('Cannot import {}_GRADER module; error={}. Exiting.'.format(assignment, ex))
         exit()
 
-    # Get a list of all the .py files in the current directory. We'll show this to the user and let him/her choose
-    # which files are assignments to be graded.
-
-    # Also track which files we have already graded, so when we list all the files, we can use some visual indicator to
-    # help the user distinguish files to be grade from files already graded.
-    #
-    # To do all of this, we'll maintain a list of 3-element lists. In each 3-element list, we'll store:
+    # Load in our grading progress thus far, which is represented as a list of lists.
+    # Each inner list contains 3 elements that describe a given student submission as follows:
     #    string    the filename
     #    boolean   True if we have graded this file, False otherwise
     #    int       total score for the assignment (so user can see scores as files are graded)
 
-    assignment_files = []
-
-    for filename in list_py_files():
-        assignment_files.append([filename, False, 0])
+    grading_progress_fname = './{}_PROGRESS.txt'.format(assignment)
+    assignment_files = load_grading_progress(grading_progress_fname)
 
     show_anyway = False
 
@@ -278,6 +295,7 @@ def run_grader():
 
     print('Writing output files...', end='')
     dump_grading_results(ALL_ASSIGNMENTS)
+    save_grading_progress(assignment_files, grading_progress_fname)
     print('Done.')
 
 
