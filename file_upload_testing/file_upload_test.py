@@ -4,8 +4,8 @@ from time import sleep
 
 
 COURSE_ID = '10190000001607278'
-ASSIGNMENT_ID = '6794941'
-STUDENT_ID = '6218019'
+ASSIGNMENT_ID = '6794941' # First Assignment
+STUDENT_ID = '6218019' # Test Student
 COURSE_URL = f'https://bostoncollege.instructure.com/api/v1/courses/{COURSE_ID}'
 SUBMISSION_URL = COURSE_URL + '/assignments/{}/submissions/{}'
 UPLOAD_URL = SUBMISSION_URL + '/comments/files'
@@ -20,7 +20,8 @@ PSET_IDS = {
 }
 
 
-# still need to come up with a way to handle failed requests
+# still need to come up with a way to handle failed requests,
+# though I haven't expereinced one so far
 def upload_file(assignment_id, student_id, filename):
     url = UPLOAD_URL.format(assignment_id, student_id)
     headers = { 'Authorization': f'Bearer {AUTH_TOKEN}' }
@@ -59,14 +60,6 @@ def get_fnames_from_current_dir(file_extension):
             yield fname
 
 
-def get_all_file_ids(folder_url):
-    headers = { 'Authorization': f'Bearer {AUTH_TOKEN}' }
-    params = { 'per_page': '100' }
-    files = requests.get(folder_url, headers=headers, params=payload).json()
-    for f in files:
-        yield f['id'] 
-
-
 # could adapt to upload and attach all submission comments / grades
 def upload_all_files(assignment_id, student_ids):
     for fname in get_fnames_from_current_dir('.txt'):
@@ -74,8 +67,9 @@ def upload_all_files(assignment_id, student_ids):
             print(f'\n**ERROR** : {fname} not uploaded\n')
 
 
+# could be useful for uploading batches of comments / grades
 def get_all_submissions(pset_id):
-    res = requests.get(f'https://canvas.instructure.comapi/v1/courses/{COURSE_ID}/assignments/{pset_id}/submissions')
+    return requests.get(f'https://canvas.instructure.comapi/v1/courses/{COURSE_ID}/assignments/{pset_id}/submissions').json()
 
 
 if __name__ == '__main__':
