@@ -4,7 +4,7 @@ from time import sleep
 
 
 COURSE_ID = '10190000001607278'
-ASSIGNMENT_ID = '6794941' # First Assignment
+TEST_ASSIGNMENT_ID = '6794941' # First Assignment
 STUDENT_ID = '6218019' # Test Student
 COURSE_URL = f'https://bostoncollege.instructure.com/api/v1/courses/{COURSE_ID}'
 SUBMISSION_URL = COURSE_URL + '/assignments/{}/submissions/{}'
@@ -54,25 +54,22 @@ def attach_file_and_post_grade(assignment_id, student_id, file_id, grade):
     return requests.put(url, headers=headers, params=params).ok
 
 
+# could be useful for uploading batches of comment files
 def get_fnames_from_current_dir(file_extension):
     for fname in os.listdir():
         if fname.endswith(file_extension):
             yield fname
 
 
-# could adapt to upload and attach all submission comments / grades
-def upload_all_files(assignment_id, student_ids):
-    for fname in get_fnames_from_current_dir('.txt'):
-        if not upload_file(UPLOAD_URL, fname):
-            print(f'\n**ERROR** : {fname} not uploaded\n')
-
-
-# could be useful for uploading batches of comments / grades
+# could be useful for uploading batches of comment files / grades
 def get_all_submissions(pset_id):
     return requests.get(f'https://canvas.instructure.comapi/v1/courses/{COURSE_ID}/assignments/{pset_id}/submissions').json()
 
 
 if __name__ == '__main__':
-    file_id = upload_file(PSET_IDS['PS1'], STUDENT_ID, 'PS1_sterpe_graded.txt')
-    attach_file_and_post_grade(PSET_IDS['PS1'], STUDENT_ID, file_id, 10)
-            
+    fname = 'PS1_sterpe_graded.txt'
+    file_id = upload_file(PSET_IDS['PS1'], STUDENT_ID, fname)
+    success = attach_file_and_post_grade(PSET_IDS['PS1'], STUDENT_ID, file_id, grade=10)
+    if not success:
+        print(f'\n**ERROR** : {fname} not uploaded\n')
+
