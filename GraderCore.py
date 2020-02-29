@@ -1,7 +1,9 @@
 from os import scandir, devnull
 from importlib import import_module
 import json
-import re, sys
+import re
+import sys
+from multiprocessing import Process, Pipe
 
 VERSION = '1.0'
 GRADED_SYMBOL = 'Y'
@@ -134,6 +136,20 @@ def display_file_list(flist):
             print(UNGRADED_TEMPLATE.format(idx+1, 'n', element[0]))
 
 
+def test_wrapper(child_pipe, test_func, student_module, idx):
+    try:
+        area_score, reason = test_func(student_module, idx)
+    except SystemExit:
+        area_score = 0
+        reason = 'Before function could return a value, it called exit() or quit(). Do not call exit() or quit().'
+    except Exception as ex:
+        area_score = 0
+        reason = 'Your code generated an error: {}'.format(ex)
+
+    child_pipe.send((area_score, reason))
+    child_pipe.close()
+
+
 def grade_file(grader, assignment_name, flist, idx):
     student_file = flist[idx][0]
 
@@ -173,7 +189,17 @@ def grade_file(grader, assignment_name, flist, idx):
             sys.stdout = FNULL
 
             # Invoke testfunc, passing it student module
-            area_score, reason = test_func(student_module)
+            parent_conn, child_conn = Pipe()
+            p = Process(target=test_wrapper, args=(child_conn, test_func, student_module, idx))
+            p.start()
+            p.join(5)
+            if p.is_alive():
+                # Probably infinite loop if process still alive
+                area_score = 0
+                reason = 'Function never returned; infinite loop?'
+                p.terminate()
+            else:
+                area_score, reason = parent_conn.recv()
 
             # Restore stdout
             sys.stdout = stdout

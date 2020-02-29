@@ -1,12 +1,13 @@
 
 MAX_POINTS = 8
 
-def test_generatePattern(module):
+
+def test_generatePattern(module, idx):
     expect = ['r', 'b', 'o', 'y']
     try:
         result = module.generatePattern()
         if result == expect:
-            return (GRADING_DATA[0]['possiblePoints'], '')
+            return (GRADING_DATA[idx]['possiblePoints'], '')
         else:
             return (0, 'Function did not return the expected list, which was {}'.format(expect))
     except Exception as ex:
@@ -14,12 +15,12 @@ def test_generatePattern(module):
                 .format(ex))
 
 
-def test_cleanGuess(module):
+def test_cleanGuess(module, idx):
     expect = ['r', 'g', 'r', 'v']
     try:
         result = module.cleanGuess(None)
         if result == expect:
-            return (GRADING_DATA[1]['possiblePoints'], '')
+            return (GRADING_DATA[idx]['possiblePoints'], '')
         else:
             return (0, 'Function did not return the expected list, which was {}'.format(expect))
     except Exception as ex:
@@ -27,12 +28,12 @@ def test_cleanGuess(module):
                 .format(ex))
 
 
-def test_guessIsValid(module):
+def test_guessIsValid(module, idx):
     expect = True
     try:
         result = module.guessIsValid(None)
         if result == expect:
-            return (GRADING_DATA[2]['possiblePoints'], '')
+            return (GRADING_DATA[idx]['possiblePoints'], '')
         else:
             return (0, 'Expected the function to return True, but it returned {}'.format(result))
     except Exception as ex:
@@ -40,12 +41,12 @@ def test_guessIsValid(module):
                 .format(ex))
 
 
-def test_evaluateGuess(module):
+def test_evaluateGuess(module, idx):
     expect = [1, 1]
     try:
         result = module.evaluateGuess(None, None)
         if result == expect:
-            return(GRADING_DATA[3]['possiblePoints'], '')
+            return(GRADING_DATA[idx]['possiblePoints'], '')
         else:
             return (0, 'Expected the function to return [1, 1], but it returned {}'.format(result))
     except Exception as ex:
@@ -53,7 +54,7 @@ def test_evaluateGuess(module):
                 .format(ex))
 
 
-def test_playGame(module):
+def test_playGame(module, idx):
     # The playGame() function reads from standard input (stdin), so to feed it our "guesses," we need to fake
     # some input. We can do this with StringIO.
 
@@ -89,7 +90,7 @@ def test_playGame(module):
                 .format(ex))
 
     if result == expect:
-        return(GRADING_DATA[4]['possiblePoints'], '')
+        return(GRADING_DATA[idx]['possiblePoints'], '')
     else:
         return(0, 'Expected to lose the game (return value of 10) after 10 guesses')
 
