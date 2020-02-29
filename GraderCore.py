@@ -1,11 +1,13 @@
-from os import scandir, devnull
+from os import scandir, devnull, listdir
 from importlib import import_module
 import json
 import re
 import sys
 from multiprocessing import Process, Pipe
+import requests   # See https://requests.readthedocs.io/en/master/
+from file_upload import *
 
-VERSION = '1.0'
+VERSION = '2.0'
 GRADED_SYMBOL = 'Y'
 GRADER_FILE_PATTERN = re.compile('.*_GRADER.py')
 ASSIGNMENT_FILE_PATTERN = re.compile('.*_([a-zA-Z0-9]+)\.py')
@@ -15,6 +17,9 @@ IMPORT_AREA_KEY = 'import'
 MAX_TOTAL_POINTS = 8
 MAX_IMPORT_POINTS = 3
 MAX_CORRECTNESS_POINTS = MAX_TOTAL_POINTS - MAX_IMPORT_POINTS
+AUTH_TOKEN = None
+COURSE_ID = '1607278'   # ISYS2157, Spring 2020
+STUDENT_URL = 'https://bostoncollege.instructure.com/api/v1/courses/{}/users'
 
 class Area:
     # An Area describes a gradable topic area of an assignment.
@@ -276,6 +281,30 @@ def save_grading_progress(assignments, fname):
         json.dump(assignments, grading_progress_file)
 
 
+def get_fnames_from_current_dir(file_extension):
+    for fname in listdir():
+        if fname.endswith(file_extension):
+            yield fname
+
+
+def fetch_students():
+    url = STUDENT_URL.format(COURSE_ID)
+    per_page = 10
+    payload = {'enrollment_type': 'student', 'per_page': per_page}
+    AUTH_HEADER = {'Authorization': 'Bearer {}'.format(AUTH_TOKEN)}
+
+
+    resp = requests.get(url, headers=AUTH_HEADER, params=payload)
+    students = json.loads(resp.text)
+
+    while 'next' in resp.links:
+        nexturl = resp.links['next']['url']
+        resp = requests.get(nexturl, headers=AUTH_HEADER)
+        students += json.loads(resp.text)
+
+    return students
+
+
 def run_grader():
     # First read in our assignment grader file, or quit if that fails.
     assignment = input('Enter the name of the assignment to be graded, e.g., PS1: ').upper()
@@ -325,6 +354,115 @@ def run_grader():
     print('Done.')
 
 
+def run_upload():
+    global AUTH_TOKEN, COURSE_ID
+
+    if not AUTH_TOKEN:
+        token_files = []
+        for tf in get_fnames_from_current_dir('.token'):
+            token_files.append(tf)
+
+        if len(token_files) == 0:
+            print('Cannot find any auth token files; will not be able to upload.\n')
+            return
+
+        for idx, fname in enumerate(token_files):
+            print(f'{idx+1:3}  {fname}')
+        tfnum = int(input('Select an auth token file: '))
+        f = open(token_files[tfnum-1], 'r')
+        AUTH_TOKEN = f.readline().rstrip('\n')
+        f.close()
+
+    course_id_ok = input(f'Using COURSE_ID {COURSE_ID}, OK? ').lower() or 'y'
+    if course_id_ok not in ['y', 'yes']:
+        COURSE_ID = input('Enter the COURSE_ID to use: ')
+
+    assignment_id = input('Enter the assignment id: ')
+
+    uploader = FileUpload(COURSE_ID, AUTH_TOKEN)
+
+    # Fetch student names and ids so we can match the grader output files
+    # to students. The grader bases its output filenames on the filenames that
+    # Canvas assigned when downloading the assignments. Canvas appears to base
+    # the downloaded filenames on its sortable_name field, converted to lowercase
+    # and stripped of punctuation.
+
+    try:
+        print('Fetching students...')
+        students = fetch_students()
+        print('Done.\n')
+    except Exception as ex:
+        print(f'Error fetching students: {ex}')
+
+    student_lookup = {}
+    for student in students:
+        keyname = ''.join([c.lower() for c in student['sortable_name'] if c.isalpha()])
+        student_lookup[keyname] = student
+
+    grader_files = []
+    for grader_file in get_fnames_from_current_dir('.txt'):
+        grader_files.append(grader_file)
+
+    while True:
+        for idx, grader_file in enumerate(grader_files):
+            print(f'{idx+1:3}  {grader_file}')
+
+        filenum = input('\nEnter file number, from-to range, or q to stop uploading: ')
+        if filenum in ['q', 'Q']:
+            break
+        elif '-' in filenum:
+            file_from, file_to = [int(x) for x in filenum.replace(' ', '').split('-')]
+        else:
+            file_from = int(filenum)
+            file_to = file_from
+
+        for fnum in range(file_from, file_to + 1):
+            fname = grader_files[fnum - 1]
+            student_name = fname.split('_')[1]
+            try:
+                student_id = student_lookup[student_name]['id']
+            except:
+                print(f'\nCannot match this filename to a student: {fname}')
+                print('Select the student from the following list:\n')
+
+                for sidx, student in enumerate(students):
+                    print(f"{sidx+1: 3}  {student['name']}")
+
+                snum = int(input('Which student? '))
+                keyname = ''.join([c.lower() for c in students[snum-1]['sortable_name'] if c.isalpha()])
+                student_id = student_lookup[keyname]['id']
+
+            # Try to parse the score from the grader file.
+            score = None
+            with open(fname, 'r') as gfile:
+                line = gfile.readline()
+                while line:
+                    if line.startswith('Total'):
+                        score = float(line.split()[1])
+                        break
+                    else:
+                        line = gfile.readline()
+
+            if not score:
+                score = float(input('Cannot read score from file; enter score: '))
+
+            file_id = uploader.upload_file(assignment_id, student_id, fname)
+            success = uploader.attach_file_and_post_grade(assignment_id, student_id, file_id, grade=score)
+
+            if not success:
+                print(f'\n**ERROR** : {fname} not uploaded\n')
+
+
 if __name__ == '__main__':
     print('Core Grader version {}\n'.format(VERSION))
-    run_grader()
+
+    while True:
+        action = input('Do you want to grade [g], upload [u], or quit [q]? ').lower()
+        if action == 'q':
+            break
+        elif action == 'g':
+            run_grader()
+        elif action == 'u':
+            run_upload()
+        else:
+            print('Enter a valid action letter')
