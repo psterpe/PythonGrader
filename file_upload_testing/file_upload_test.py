@@ -9,7 +9,7 @@ STUDENT_ID = '6218019' # Test Student
 COURSE_URL = f'https://bostoncollege.instructure.com/api/v1/courses/{COURSE_ID}'
 SUBMISSION_URL = COURSE_URL + '/assignments/{}/submissions/{}'
 UPLOAD_URL = SUBMISSION_URL + '/comments/files'
-AUTH_TOKEN = '1019~hvb525CMuZvZ9rjIouP04Y1MMfBrhdBiRFB29hS0mHckZmvpgkVswWgOSS98Z0gB'
+AUTH_TOKEN = 'not_shown_in_code_that_is_sent_to_a_repository'
 PSET_IDS = {
     'PS1': '6794944',
     'PS2': '6794945',
