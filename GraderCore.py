@@ -1,16 +1,17 @@
-from os import scandir, devnull, listdir
+from os import scandir, devnull, listdir, chdir
 from importlib import import_module
 import json
 import re
 import sys
-from multiprocessing import Process, Pipe
-import requests   # See https://requests.readthedocs.io/en/master/
+from multiprocessing import Pool, TimeoutError
+import dill
 from file_upload import *
+from tkinter import Tk, filedialog
 
 VERSION = '2.0'
 GRADED_SYMBOL = 'Y'
 GRADER_FILE_PATTERN = re.compile('.*_GRADER.py')
-ASSIGNMENT_FILE_PATTERN = re.compile('.*_([a-zA-Z0-9]+)\.py')
+ASSIGNMENT_FILE_PATTERN = re.compile('([a-zA-Z]+)_.*\.py')
 ALL_ASSIGNMENTS = []
 FNULL = open(devnull, 'w')
 IMPORT_AREA_KEY = 'import'
@@ -20,6 +21,8 @@ MAX_CORRECTNESS_POINTS = MAX_TOTAL_POINTS - MAX_IMPORT_POINTS
 AUTH_TOKEN = None
 COURSE_ID = '1607278'   # ISYS2157, Spring 2020
 STUDENT_URL = 'https://bostoncollege.instructure.com/api/v1/courses/{}/users'
+ASSIGNMENT_DIR = '.'
+OUTPUT_DIR = '.'
 
 class Area:
     # An Area describes a gradable topic area of an assignment.
@@ -141,7 +144,17 @@ def display_file_list(flist):
             print(UNGRADED_TEMPLATE.format(idx+1, 'n', element[0]))
 
 
-def test_wrapper(child_pipe, test_func, student_module, idx):
+def run_dill_encoded(payload):
+    funcref, args = dill.loads(payload)
+    return funcref(*args)
+
+
+def apply_async(pool, args):
+    payload = dill.dumps((test_wrapper, args))
+    return pool.apply_async(run_dill_encoded, (payload,))
+
+
+def test_wrapper(test_func, student_module, idx):
     try:
         area_score, reason = test_func(student_module, idx)
     except SystemExit:
@@ -151,8 +164,7 @@ def test_wrapper(child_pipe, test_func, student_module, idx):
         area_score = 0
         reason = 'Your code generated an error: {}'.format(ex)
 
-    child_pipe.send((area_score, reason))
-    child_pipe.close()
+    return area_score, reason
 
 
 def grade_file(grader, assignment_name, flist, idx):
@@ -194,17 +206,17 @@ def grade_file(grader, assignment_name, flist, idx):
             sys.stdout = FNULL
 
             # Invoke testfunc, passing it student module
-            parent_conn, child_conn = Pipe()
-            p = Process(target=test_wrapper, args=(child_conn, test_func, student_module, idx))
-            p.start()
-            p.join(5)
-            if p.is_alive():
-                # Probably infinite loop if process still alive
+            pool = Pool(1)
+            job = apply_async(pool, (test_func, student_module, idx))
+
+            try:
+                area_score, reason = job.get(timeout=4)
+            except TimeoutError as ex:
+                # Probably infinite loop if process didn't respond in time
                 area_score = 0
                 reason = 'Function never returned; infinite loop?'
-                p.terminate()
-            else:
-                area_score, reason = parent_conn.recv()
+
+            pool.terminate()
 
             # Restore stdout
             sys.stdout = stdout
@@ -235,7 +247,7 @@ def dump_grading_results(assignments):
     DASHED_LINE = '-'*50 + '\n'
 
     for a in assignments:
-        outfile = open('{}_{}_graded.txt'.format(a.assignment, a.student), 'w')
+        outfile = open('{}/{}_{}_graded.txt'.format(ASSIGNMENT_DIR, a.assignment, a.student), 'w')
         import_area = a.areas['import']
 
         with outfile as o:
@@ -281,8 +293,8 @@ def save_grading_progress(assignments, fname):
         json.dump(assignments, grading_progress_file)
 
 
-def get_fnames_from_current_dir(file_extension):
-    for fname in listdir():
+def get_fnames_from_dir(dir, file_extension):
+    for fname in listdir(dir):
         if fname.endswith(file_extension):
             yield fname
 
@@ -302,6 +314,12 @@ def fetch_students():
         resp = requests.get(nexturl, headers=AUTH_HEADER)
         students += json.loads(resp.text)
 
+    # Go back and fetch test_student; can be handy during development
+    payload = {'enrollment_type': 'student_view'}
+    resp = requests.get(url, headers=AUTH_HEADER, params=payload)
+    test_student = json.loads(resp.text)
+    students += test_student
+
     return students
 
 
@@ -320,7 +338,7 @@ def run_grader():
     #    boolean   True if we have graded this file, False otherwise
     #    int       total score for the assignment (so user can see scores as files are graded)
 
-    grading_progress_fname = './{}_PROGRESS.txt'.format(assignment)
+    grading_progress_fname = '{}/{}_PROGRESS.txt'.format(ASSIGNMENT_DIR, assignment)
     assignment_files = load_grading_progress(grading_progress_fname)
 
     show_anyway = False
@@ -359,7 +377,7 @@ def run_upload():
 
     if not AUTH_TOKEN:
         token_files = []
-        for tf in get_fnames_from_current_dir('.token'):
+        for tf in get_fnames_from_dir(os.curdir, '.token'):
             token_files.append(tf)
 
         if len(token_files) == 0:
@@ -400,7 +418,7 @@ def run_upload():
         student_lookup[keyname] = student
 
     grader_files = []
-    for grader_file in get_fnames_from_current_dir('.txt'):
+    for grader_file in get_fnames_from_dir(OUTPUT_DIR, '.txt'):
         grader_files.append(grader_file)
 
     while True:
@@ -434,7 +452,9 @@ def run_upload():
 
             # Try to parse the score from the grader file.
             score = None
-            with open(fname, 'r') as gfile:
+            gfilepath = '{}/{}'.format(OUTPUT_DIR, fname)
+
+            with open(gfilepath, 'r') as gfile:
                 line = gfile.readline()
                 while line:
                     if line.startswith('Total'):
@@ -444,9 +464,9 @@ def run_upload():
                         line = gfile.readline()
 
             if not score:
-                score = float(input('Cannot read score from file; enter score: '))
+                score = float(input(f'Cannot read score from {fname}; enter score: '))
 
-            file_id = uploader.upload_file(assignment_id, student_id, fname)
+            file_id = uploader.upload_file(assignment_id, student_id, gfilepath)
             success = uploader.attach_file_and_post_grade(assignment_id, student_id, file_id, grade=score)
 
             if not success:
@@ -461,8 +481,17 @@ if __name__ == '__main__':
         if action == 'q':
             break
         elif action == 'g':
+            win = Tk()
+            win.withdraw()
+            ASSIGNMENT_DIR = filedialog.askdirectory(title="Where are the files?", initialdir=ASSIGNMENT_DIR)
+            win.destroy()
+            sys.path.append(ASSIGNMENT_DIR)
             run_grader()
         elif action == 'u':
+            win = Tk()
+            win.withdraw()
+            OUTPUT_DIR = filedialog.askdirectory(title="Where are the files?", initialdir=ASSIGNMENT_DIR)
+            win.destroy()
             run_upload()
         else:
             print('Enter a valid action letter')

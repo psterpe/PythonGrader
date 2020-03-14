@@ -10,12 +10,12 @@ class FileUpload:
         self.UPLOAD_URL = self.SUBMISSION_URL + '/comments/files'
 
 
-    def upload_file(self, assignment_id, student_id, filename):
+    def upload_file(self, assignment_id, student_id, filepath):
         url = self.UPLOAD_URL.format(assignment_id, student_id)
         headers = { 'Authorization': f'Bearer {self.AUTH_TOKEN}' }
         payload = {
-            'name': filename,
-            'size': os.path.getsize(f'./{filename}'),
+            'name': os.path.basename(filepath),
+            'size': os.path.getsize(filepath),
             'content_type': 'text'
         }
 
@@ -26,7 +26,7 @@ class FileUpload:
         res2 = requests.post(
             res1['upload_url'],
             data=res1['upload_params'],
-            files={'file': open(filename, 'rb')}
+            files={'file': open(filepath, 'rb')}
         )
 
         return res2.json()['id']
