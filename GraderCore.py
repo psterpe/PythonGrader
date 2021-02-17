@@ -19,8 +19,8 @@ MAX_TOTAL_POINTS = 8
 MAX_IMPORT_POINTS = 3
 MAX_CORRECTNESS_POINTS = MAX_TOTAL_POINTS - MAX_IMPORT_POINTS
 AUTH_TOKEN = None
-COURSE_ID = '1607278'   # ISYS2157, Spring 2020
-STUDENT_URL = 'https://bostoncollege.instructure.com/api/v1/courses/{}/users'
+COURSE_ID = ''
+STUDENT_URL = 'https://canvasurl/api/v1/courses/{}/users'
 ASSIGNMENT_DIR = '.'
 OUTPUT_DIR = '.'
 
