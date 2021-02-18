@@ -1,7 +1,7 @@
 # Python Assignment Grader (with Canvas LMS integration)
 
-This is work in progress to make some code that I wrote for personal use a bit more generally useful
-to others.
+This is work in progress to make some code that a student and I wrote for our own use
+a bit more generally useful to others.
 
 Do you teach programming with the Python language? This code will help you grade coding assignments.
 It will grade for correctness, that is, whether a student's code does what you asked for. It
@@ -109,7 +109,7 @@ The number after `courses/` is your Course ID, and the number after `assignments
 
 To run the grading engine:
 1. Open a Terminal (Mac) or Command Prompt (Windows).
-1. Navigate to the folder where your GraderCore.py file is located
+1. Navigate to the folder where your GraderCore.py file is located.
 1. Run this command: `python GraderCore.py`
 
 The grader will issue this prompt: `Do you want to grade [g], upload [u], or quit [q]?` Enter a `g`.
