@@ -1,28 +1,39 @@
-from os import scandir, devnull, listdir, chdir
+from os import scandir, devnull, listdir
 from importlib import import_module
 import json
 import re
 import sys
 from multiprocessing import Pool, TimeoutError
 import dill
+import requests
 from file_upload import *
 from tkinter import Tk, filedialog
 
-VERSION = '2.0'
-GRADED_SYMBOL = 'Y'
-GRADER_FILE_PATTERN = re.compile('.*_GRADER.py')
-ASSIGNMENT_FILE_PATTERN = re.compile('([a-zA-Z]+)_.*\.py')
-ALL_ASSIGNMENTS = []
-FNULL = open(devnull, 'w')
-IMPORT_AREA_KEY = 'import'
-MAX_TOTAL_POINTS = 8
-MAX_IMPORT_POINTS = 3
-MAX_CORRECTNESS_POINTS = MAX_TOTAL_POINTS - MAX_IMPORT_POINTS
-AUTH_TOKEN = None
-COURSE_ID = ''
-STUDENT_URL = 'https://canvasurl/api/v1/courses/{}/users'
-ASSIGNMENT_DIR = '.'
-OUTPUT_DIR = '.'
+
+# Try to read the configuration file and use it to set attributes of Config class
+class Config:
+    def __setitem__(self, key, value):
+        self.__dict__[key] = value
+
+
+config = Config()
+
+try:
+    config_fp = open('config.json', 'r')
+    config_dict = json.load(config_fp)
+    for key, value in config_dict.items():
+        config[key] = value
+except Exception as ex:
+    print(f'Exception trying to read config file: {ex}')
+    sys.exit(1)
+
+# Add useful values to the config
+config['MAX_CORRECTNESS_POINTS'] = config.MAX_TOTAL_POINTS - config.MAX_IMPORT_POINTS
+config['AUTH_TOKEN'] = None
+config['STUDENT_URL'] = 'https://{}/api/v1/courses/{}/users'
+config['ALL_ASSIGNMENTS'] = []
+config['FNULL'] = open(devnull, 'w')
+
 
 class Area:
     # An Area describes a gradable topic area of an assignment.
@@ -58,17 +69,17 @@ class Assignment:
         graderScore = 0
 
         for item in self.areas.values():
-            if item.key == IMPORT_AREA_KEY:
+            if item.key == config.IMPORT_AREA_KEY:
                 score += item.actualPoints
             else:
                 graderScore += item.actualPoints
 
         # Calculate % of available points awarded by PSX_GRADER.py, then apply to MAX_CORRECTNESS_POINTS
-        score += (graderScore / self.grader.MAX_POINTS) * MAX_CORRECTNESS_POINTS
+        score += (graderScore / self.grader.MAX_POINTS) * config.MAX_CORRECTNESS_POINTS
 
         self.actualScore = score
         self.graderScore = graderScore
-        self.possibleScore = MAX_TOTAL_POINTS
+        self.possibleScore = config.MAX_TOTAL_POINTS
 
 
 # To make grading somewhat declarative, we use a data structure as described below. The data structure is a list
@@ -116,7 +127,7 @@ class Assignment:
 def is_student_submission(entry):
     return entry.is_file() and \
            entry.name.endswith('.py') and not \
-           re.match(GRADER_FILE_PATTERN, entry.name) and \
+           re.match(config.GRADER_FILE_PATTERN, entry.name) and \
            entry.name != __file__
 
 
@@ -139,7 +150,7 @@ def display_file_list(flist):
 
     for idx, element in enumerate(flist):
         if element[1]:
-            print(GRADED_TEMPLATE.format(idx+1, GRADED_SYMBOL, element[2], element[0]))
+            print(GRADED_TEMPLATE.format(idx+1, config.GRADED_SYMBOL, element[2], element[0]))
         else:
             print(UNGRADED_TEMPLATE.format(idx+1, 'n', element[0]))
 
@@ -171,7 +182,7 @@ def grade_file(grader, assignment_name, flist, idx):
     student_file = flist[idx][0]
 
     try:
-        short_email = re.match(ASSIGNMENT_FILE_PATTERN, student_file)[1]
+        short_email = re.match(config.ASSIGNMENT_FILE_PATTERN, student_file)[1]
     except:
         print('Cannot extract short email from {}; using filename.'.format(student_file))
         short_email = student_file[:-3]   # Drop the .py suffix
@@ -180,17 +191,17 @@ def grade_file(grader, assignment_name, flist, idx):
     # There is no dictionary in GRADING_DATA for this; we know we have to import the student's code, so we
     # just create an Area for that.
     assignment = Assignment(grader, assignment_name, short_email)
-    ALL_ASSIGNMENTS.append(assignment)
+    config.ALL_ASSIGNMENTS.append(assignment)
 
-    able_to_import = Area(IMPORT_AREA_KEY, 'Code can be imported without error', MAX_IMPORT_POINTS)
+    able_to_import = Area(config.IMPORT_AREA_KEY, 'Code can be imported without error', config.MAX_IMPORT_POINTS)
     assignment.add_area(able_to_import)
 
     # Let's try to import the student's code
     try:
         student_module = import_module(student_file[:-3])
-        assignment.score_area(IMPORT_AREA_KEY, MAX_IMPORT_POINTS, '')
+        assignment.score_area(config.IMPORT_AREA_KEY, config.MAX_IMPORT_POINTS, '')
     except Exception as ex:
-        assignment.score_area(IMPORT_AREA_KEY, 0, 'We could not import your code. Here is the error message: {}'.format(ex))
+        assignment.score_area(config.IMPORT_AREA_KEY, 0, 'We could not import your code. Here is the error message: {}'.format(ex))
         return assignment
 
     # We imported OK, now run tests
@@ -203,14 +214,14 @@ def grade_file(grader, assignment_name, flist, idx):
         try:
             # Suppress output from student code
             stdout = sys.stdout
-            sys.stdout = FNULL
+            sys.stdout = config.FNULL
 
             # Invoke testfunc, passing it student module
             pool = Pool(1)
             job = apply_async(pool, (test_func, student_module, idx))
 
             try:
-                area_score, reason = job.get(timeout=4)
+                area_score, reason = job.get(timeout=config.JOB_TIMEOUT)
             except TimeoutError as ex:
                 # Probably infinite loop if process didn't respond in time
                 area_score = 0
@@ -247,7 +258,7 @@ def dump_grading_results(assignments):
     DASHED_LINE = '-'*50 + '\n'
 
     for a in assignments:
-        outfile = open('{}/{}_{}_graded.txt'.format(ASSIGNMENT_DIR, a.assignment, a.student), 'w')
+        outfile = open('{}/{}_{}_graded.txt'.format(config.ASSIGNMENT_DIR, a.assignment, a.student), 'w')
         import_area = a.areas['import']
 
         with outfile as o:
@@ -266,9 +277,9 @@ def dump_grading_results(assignments):
             o.write(DASHED_LINE)
             o.write(CORRECTNESS_TEMPLATE.format(
                 'Correctness Points',
-                EQUATION_TEMPLATE.format(a.graderScore, a.grader.MAX_POINTS, MAX_CORRECTNESS_POINTS),
+                EQUATION_TEMPLATE.format(a.graderScore, a.grader.MAX_POINTS, config.MAX_CORRECTNESS_POINTS),
                 a.actualScore - import_area.possiblePoints,
-                MAX_CORRECTNESS_POINTS
+                config.MAX_CORRECTNESS_POINTS
             ))
             o.write(DASHED_LINE)
             o.write(FOOTER_TEMPLATE.format('Total', a.actualScore, float(a.possibleScore)))
@@ -300,23 +311,22 @@ def get_fnames_from_dir(dir, file_extension):
 
 
 def fetch_students():
-    url = STUDENT_URL.format(COURSE_ID)
+    url = config.STUDENT_URL.format(config.COURSE_ID)
     per_page = 10
     payload = {'enrollment_type': 'student', 'per_page': per_page}
-    AUTH_HEADER = {'Authorization': 'Bearer {}'.format(AUTH_TOKEN)}
+    auth_header = {'Authorization': 'Bearer {}'.format(config.AUTH_TOKEN)}
 
-
-    resp = requests.get(url, headers=AUTH_HEADER, params=payload)
+    resp = requests.get(url, headers=auth_header, params=payload)
     students = json.loads(resp.text)
 
     while 'next' in resp.links:
         nexturl = resp.links['next']['url']
-        resp = requests.get(nexturl, headers=AUTH_HEADER)
+        resp = requests.get(nexturl, headers=auth_header)
         students += json.loads(resp.text)
 
     # Go back and fetch test_student; can be handy during development
     payload = {'enrollment_type': 'student_view'}
-    resp = requests.get(url, headers=AUTH_HEADER, params=payload)
+    resp = requests.get(url, headers=auth_header, params=payload)
     test_student = json.loads(resp.text)
     students += test_student
 
@@ -338,7 +348,7 @@ def run_grader():
     #    boolean   True if we have graded this file, False otherwise
     #    int       total score for the assignment (so user can see scores as files are graded)
 
-    grading_progress_fname = '{}/{}_PROGRESS.txt'.format(ASSIGNMENT_DIR, assignment)
+    grading_progress_fname = '{}/{}_PROGRESS.txt'.format(config.ASSIGNMENT_DIR, assignment)
     assignment_files = load_grading_progress(grading_progress_fname)
 
     show_anyway = False
@@ -367,15 +377,13 @@ def run_grader():
                 break
 
     print('Writing output files...', end='')
-    dump_grading_results(ALL_ASSIGNMENTS)
+    dump_grading_results(config.ALL_ASSIGNMENTS)
     save_grading_progress(assignment_files, grading_progress_fname)
     print('Done.')
 
 
 def run_upload():
-    global AUTH_TOKEN, COURSE_ID
-
-    if not AUTH_TOKEN:
+    if not config.AUTH_TOKEN:
         token_files = []
         for tf in get_fnames_from_dir(os.curdir, '.token'):
             token_files.append(tf)
@@ -388,16 +396,14 @@ def run_upload():
             print(f'{idx+1:3}  {fname}')
         tfnum = int(input('Select an auth token file: '))
         f = open(token_files[tfnum-1], 'r')
-        AUTH_TOKEN = f.readline().rstrip('\n')
+        config.AUTH_TOKEN = f.readline().rstrip('\n')
         f.close()
 
-    course_id_ok = input(f'Using COURSE_ID {COURSE_ID}, OK? ').lower() or 'y'
-    if course_id_ok not in ['y', 'yes']:
-        COURSE_ID = input('Enter the COURSE_ID to use: ')
+    config.COURSE_ID = input('Enter the COURSE_ID to use: ')
 
     assignment_id = input('Enter the assignment id: ')
 
-    uploader = FileUpload(COURSE_ID, AUTH_TOKEN)
+    uploader = FileUpload(config.COURSE_ID, config.AUTH_TOKEN, config)
 
     # Fetch student names and ids so we can match the grader output files
     # to students. The grader bases its output filenames on the filenames that
@@ -418,7 +424,7 @@ def run_upload():
         student_lookup[keyname] = student
 
     grader_files = []
-    for grader_file in get_fnames_from_dir(OUTPUT_DIR, '.txt'):
+    for grader_file in get_fnames_from_dir(config.OUTPUT_DIR, '.txt'):
         grader_files.append(grader_file)
 
     while True:
@@ -452,7 +458,7 @@ def run_upload():
 
             # Try to parse the score from the grader file.
             score = None
-            gfilepath = '{}/{}'.format(OUTPUT_DIR, fname)
+            gfilepath = '{}/{}'.format(config.OUTPUT_DIR, fname)
 
             with open(gfilepath, 'r') as gfile:
                 line = gfile.readline()
@@ -473,25 +479,22 @@ def run_upload():
                 print(f'\n**ERROR** : {fname} not uploaded\n')
 
 
-if __name__ == '__main__':
-    print('Core Grader version {}\n'.format(VERSION))
-
-    while True:
-        action = input('Do you want to grade [g], upload [u], or quit [q]? ').lower()
-        if action == 'q':
-            break
-        elif action == 'g':
-            win = Tk()
-            win.withdraw()
-            ASSIGNMENT_DIR = filedialog.askdirectory(title="Where are the files?", initialdir=ASSIGNMENT_DIR)
-            win.destroy()
-            sys.path.append(ASSIGNMENT_DIR)
-            run_grader()
-        elif action == 'u':
-            win = Tk()
-            win.withdraw()
-            OUTPUT_DIR = filedialog.askdirectory(title="Where are the files?", initialdir=ASSIGNMENT_DIR)
-            win.destroy()
-            run_upload()
-        else:
-            print('Enter a valid action letter')
+while True:
+    action = input('Do you want to grade [g], upload [u], or quit [q]? ').lower()
+    if action == 'q':
+        break
+    elif action == 'g':
+        win = Tk()
+        win.withdraw()
+        config.ASSIGNMENT_DIR = filedialog.askdirectory(title="Where are the files?", initialdir=config.ASSIGNMENT_DIR)
+        win.destroy()
+        sys.path.append(config.ASSIGNMENT_DIR)
+        run_grader()
+    elif action == 'u':
+        win = Tk()
+        win.withdraw()
+        config.OUTPUT_DIR = filedialog.askdirectory(title="Where are the files?", initialdir=config.ASSIGNMENT_DIR)
+        win.destroy()
+        run_upload()
+    else:
+        print('Enter a valid action letter')

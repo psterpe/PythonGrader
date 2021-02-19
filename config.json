@@ -1,0 +1,12 @@
+{
+  "GRADED_SYMBOL": "Y",
+  "GRADER_FILE_PATTERN": ".*_GRADER.py",
+  "ASSIGNMENT_FILE_PATTERN": "([a-zA-Z]+)_.*\\.py",
+  "IMPORT_AREA_KEY": "import",
+  "MAX_TOTAL_POINTS": 8,
+  "MAX_IMPORT_POINTS": 3,
+  "CANVAS_BASE": "https://bostoncollege.instructure.com",
+  "JOB_TIMEOUT": 4,
+  "ASSIGNMENT_DIR": ".",
+  "OUTPUT_DIR": "."
+}

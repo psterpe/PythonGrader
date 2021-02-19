@@ -1,0 +1,11 @@
+Automated Grading Output for PS1 (Student: studentx)
+
+Grading Area                        Points    
+--------------------------------------------------
+Code can be imported without error  3 of  3
+--------------------------------------------------
+Loan payment calculation            2 of  2
+--------------------------------------------------
+Correctness Points    (2/2) * 5 = 5.0 of  5.0 
+--------------------------------------------------
+Total                             8.0 of  8.0 

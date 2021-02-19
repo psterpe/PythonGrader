@@ -1,1 +1,1 @@
-[["PS1_sterpe.py", true, 8.0], ["PS1_sterpeerrors.py", false, 0]]
+[["GraderCore.py", false, 0], ["file_upload.py", false, 0], ["studentx_PS1.py", true, 8.0]]

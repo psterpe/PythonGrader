@@ -2,13 +2,12 @@ import requests
 import os
 
 class FileUpload:
-    def __init__(self, course_id, auth_token):
+    def __init__(self, course_id, auth_token, config):
         self.COURSE_ID = course_id
         self.AUTH_TOKEN = auth_token
-        self.COURSE_URL = f'https://bostoncollege.instructure.com/api/v1/courses/{self.COURSE_ID}'
+        self.COURSE_URL = f'{config.CANVAS_BASE}/api/v1/courses/{self.COURSE_ID}'
         self.SUBMISSION_URL = self.COURSE_URL + '/assignments/{}/submissions/{}'
         self.UPLOAD_URL = self.SUBMISSION_URL + '/comments/files'
-
 
     def upload_file(self, assignment_id, student_id, filepath):
         url = self.UPLOAD_URL.format(assignment_id, student_id)
@@ -30,7 +29,6 @@ class FileUpload:
         )
 
         return res2.json()['id']
-
 
     def attach_file_and_post_grade(self, assignment_id, student_id, file_id, grade):
         url = self.SUBMISSION_URL.format(assignment_id, student_id)
